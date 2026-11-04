@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/yuanyeye0210-debug/DeskStyle/docs/layout-plan.schema.json",
+  "title": "DeskStyle layout plan",
+  "description": "Phase 1 home-screen plan. Placement authority is pages and dock. library is the recognition list only. Coordinates are zero-based cell indexes with the origin at the top-left. The dock is shared by every page and stored once.",
+  "type": "object",
+  "required": ["version", "schema", "styleId", "grid", "library", "dock", "pages"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "schema": { "type": "string", "const": "deskstyle.layout.v1" },
+    "note": { "type": "string" },
+    "styleId": {
+      "type": "string",
+      "enum": ["minimal", "dark", "morandi", "cute", "ocean", "sunset"]
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "coordinateSystem": { "type": "string", "const": "column-row-top-left" },
+    "grid": {
+      "type": "object",
+      "required": ["columns", "rows", "dockRow"],
+      "properties": {
+        "columns": { "type": "integer", "const": 4 },
+        "rows": { "type": "integer", "description": "Visual rows including the dock row." },
+        "dockRow": { "type": "integer", "description": "Dock row index. Content cells use rows 0 ..< dockRow." }
+      }
+    },
+    "screen": {
+      "type": ["object", "null"],
+      "properties": {
+        "widthPoints": { "type": "number" },
+        "heightPoints": { "type": "number" },
+        "scale": { "type": "number" }
+      }
+    },
+    "library": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/libraryApp" }
+    },
+    "dock": {
+      "type": "array",
+      "maxItems": 4,
+      "items": { "$ref": "#/$defs/layoutItem" }
+    },
+    "pages": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/page" }
+    }
+  },
+  "$defs": {
+    "libraryApp": {
+      "type": "object",
+      "required": ["id", "name", "category", "colorHex", "source"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "colorHex": { "type": "string" },
+        "column": { "type": ["integer", "null"] },
+        "row": { "type": ["integer", "null"] },
+        "zone": { "type": ["string", "null"], "enum": ["grid", "dock", null] },
+        "confidence": { "type": ["number", "null"] },
+        "source": { "type": "string", "enum": ["vision", "manual", "sample"] }
+      }
+    },
+    "page": {
+      "type": "object",
+      "required": ["id", "index", "items"],
+      "properties": {
+        "id": { "type": "string" },
+        "index": { "type": "integer" },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/layoutItem" }
+        }
+      }
+    },
+    "layoutItem": {
+      "type": "object",
+      "required": ["id", "kind", "name", "pageIndex", "column", "row", "columnSpan", "rowSpan", "zone"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "type": "string", "enum": ["app", "widget", "folder"] },
+        "name": { "type": "string" },
+        "widgetKind": {
+          "type": ["string", "null"],
+          "enum": ["clock", "calendar", "photo", "countdown", "quote", null]
+        },
+        "category": { "type": ["string", "null"] },
+        "colorHex": { "type": ["string", "null"] },
+        "symbolName": { "type": ["string", "null"] },
+        "bundleHint": {
+          "type": ["string", "null"],
+          "description": "Reserved. Phase 1 always null because iOS cannot list installed bundle identifiers."
+        },
+        "pageIndex": { "type": "integer", "description": "-1 for dock items." },
+        "column": { "type": "integer" },
+        "row": { "type": "integer" },
+        "columnSpan": { "type": "integer" },
+        "rowSpan": { "type": "integer" },
+        "zone": { "type": "string", "enum": ["grid", "dock"] },
+        "children": {
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}
