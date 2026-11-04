@@ -17,7 +17,7 @@ enum OrganizationEngine {
             )
         ]
         let groups = Dictionary(grouping: apps, by: \.category)
-        let categories = groups.keys.sorted { AppCatalog.categoryRank($0) < AppCatalog.categoryRank($1) }
+        let categories = groups.keys.sorted(by: { AppCatalog.categoryRank($0) < AppCatalog.categoryRank($1) })
         for category in categories {
             let names = groups[category] ?? []
             guard names.count >= 2 else { continue }

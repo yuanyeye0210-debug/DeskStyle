@@ -30,13 +30,15 @@ enum AppCatalog {
     ]
 
     private static let flattened: [(keyword: String, category: String)] = {
-        var pairs: [(String, String)] = []
+        var pairs: [(keyword: String, category: String)] = []
         for rule in rules {
             for keyword in rule.keywords {
-                pairs.append((keyword.lowercased(), rule.category))
+                pairs.append((keyword: keyword.lowercased(), category: rule.category))
             }
         }
-        return pairs.sorted { $0.keyword.count > $1.keyword.count }
+        return pairs.sorted(by: { left, right in
+            left.keyword.count > right.keyword.count
+        })
     }()
 
     private static let knownColors: [String: String] = [

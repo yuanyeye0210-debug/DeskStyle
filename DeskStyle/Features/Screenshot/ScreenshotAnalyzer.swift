@@ -160,8 +160,8 @@ enum ScreenshotAnalyzer {
     }
 
     private static func layout(_ candidates: [Candidate]) -> [LibraryApp] {
-        let dock = candidates.filter { $0.midY >= 0.86 }.sorted { $0.midX < $1.midX }
-        let grid = candidates.filter { $0.midY < 0.86 }.sorted { $0.midY < $1.midY }
+        let dock = candidates.filter { $0.midY >= 0.86 }.sorted(by: { $0.midX < $1.midX })
+        let grid = candidates.filter { $0.midY < 0.86 }.sorted(by: { $0.midY < $1.midY })
         var rows: [[Candidate]] = []
         for candidate in grid {
             if let lastY = rows.last?.map(\.midY).max(), abs(candidate.midY - lastY) < 0.05 {
@@ -178,7 +178,7 @@ enum ScreenshotAnalyzer {
             } else {
                 mappedRow = min(4, rowIndex * 5 / rows.count)
             }
-            let ordered = row.sorted { $0.midX < $1.midX }
+            let ordered = row.sorted(by: { $0.midX < $1.midX })
             var used = Set<Int>()
             for (index, candidate) in ordered.enumerated() {
                 var column = columnIndex(midX: candidate.midX, count: ordered.count, index: index)

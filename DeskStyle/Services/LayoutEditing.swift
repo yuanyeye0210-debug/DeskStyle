@@ -257,12 +257,12 @@ private extension LayoutEditing {
     }
 
     static func placeByScreenshot(_ plan: inout LayoutPlan, apps: [LibraryApp]) {
-        let dockApps = apps.filter { $0.zone == .dock }.sorted { ($0.column ?? 0) < ($1.column ?? 0) }
+        let dockApps = apps.filter { $0.zone == .dock }.sorted(by: { ($0.column ?? 0) < ($1.column ?? 0) })
         let positioned = apps.filter { $0.zone != .dock && $0.column != nil && $0.row != nil }
-            .sorted {
-                if ($0.row ?? 0) == ($1.row ?? 0) { return ($0.column ?? 0) < ($1.column ?? 0) }
-                return ($0.row ?? 0) < ($1.row ?? 0)
-            }
+            .sorted(by: { left, right in
+                if (left.row ?? 0) == (right.row ?? 0) { return (left.column ?? 0) < (right.column ?? 0) }
+                return (left.row ?? 0) < (right.row ?? 0)
+            })
         let leftovers = apps.filter { app in
             app.zone != .dock && (app.column == nil || app.row == nil)
         }
@@ -312,10 +312,10 @@ private extension LayoutEditing {
 
     static func folderItems(from apps: [LibraryApp]) -> [Placeable] {
         let groups = Dictionary(grouping: apps, by: \.category)
-        let categories = groups.keys.sorted { AppCatalog.categoryRank($0) < AppCatalog.categoryRank($1) }
+        let categories = groups.keys.sorted(by: { AppCatalog.categoryRank($0) < AppCatalog.categoryRank($1) })
         var items: [Placeable] = []
         for category in categories {
-            let members = (groups[category] ?? []).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            let members = (groups[category] ?? []).sorted(by: { $0.name.localizedStandardCompare($1.name) == .orderedAscending })
             if members.count >= 2 {
                 items.append(.folder(name: category, category: category, children: members))
             } else if let only = members.first {
