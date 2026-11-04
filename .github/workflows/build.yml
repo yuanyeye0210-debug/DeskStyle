@@ -1,0 +1,144 @@
+name: Build IPA
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: deskstyle-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ipa:
+    name: Unsigned iOS IPA
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcode-select -p
+          sw_vers
+
+      - name: Install XcodeGen 2.46.0
+        run: |
+          set -euo pipefail
+          VERSION=2.46.0
+          ROOT="$RUNNER_TEMP/xcodegen-src"
+          mkdir -p "$ROOT" "$HOME/.local/bin"
+          if curl -fL --retry 3 --retry-delay 2 -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${VERSION}/xcodegen.zip"; then
+            unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$ROOT"
+            BIN="$(find "$ROOT" -type f -path '*/bin/xcodegen' ! -path '*/__MACOSX/*' | head -n 1 || true)"
+            if [ -z "$BIN" ]; then
+              BIN="$(find "$ROOT" -type f -name xcodegen ! -path '*/__MACOSX/*' | head -n 1 || true)"
+            fi
+          else
+            BIN=""
+          fi
+          if [ -z "${BIN:-}" ]; then
+            echo "Pinned archive unavailable, installing XcodeGen with Homebrew"
+            brew install xcodegen
+            BIN="$(command -v xcodegen)"
+          fi
+          cp "$BIN" "$HOME/.local/bin/xcodegen"
+          chmod +x "$HOME/.local/bin/xcodegen"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/xcodegen" version
+
+      - name: Generate project
+        run: |
+          set -euo pipefail
+          xcodegen generate --spec project.yml
+          echo "---- targets ----"
+          grep -n "isa = PBXNativeTarget" -A 3 DeskStyle.xcodeproj/project.pbxproj
+          TARGETS="$(grep -c "isa = PBXNativeTarget" DeskStyle.xcodeproj/project.pbxproj)"
+          echo "native target count: $TARGETS"
+          test "$TARGETS" -eq 2
+          echo "---- embed ----"
+          grep -n -E "Embed App Extensions|dstSubfolderSpec|CodeSignOnCopy|DeskStyleWidget" DeskStyle.xcodeproj/project.pbxproj
+          grep -q "dstSubfolderSpec = 13" DeskStyle.xcodeproj/project.pbxproj
+          if grep -q "CodeSignOnCopy" DeskStyle.xcodeproj/project.pbxproj; then
+            echo "CodeSignOnCopy must stay off for an unsigned embed"
+            exit 1
+          fi
+          xcodebuild -list -project DeskStyle.xcodeproj
+
+      - name: Build Release iphoneos
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project DeskStyle.xcodeproj \
+            -scheme DeskStyle \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -sdk iphoneos \
+            -derivedDataPath "$GITHUB_WORKSPACE/build" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=NO \
+            VALIDATE_PRODUCT=NO \
+            ENABLE_PREVIEWS=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          APP="$(find "$GITHUB_WORKSPACE/build/Build/Products" -type d -name 'DeskStyle.app' | head -n 1)"
+          echo "APP=$APP"
+          test -n "$APP"
+          test -d "$APP"
+          test -f "$APP/DeskStyle"
+          test -d "$APP/PlugIns"
+          APPEX="$(find "$APP/PlugIns" -type d -name '*.appex' | head -n 1)"
+          echo "APPEX=$APPEX"
+          test -n "$APPEX"
+          test -f "$APPEX/DeskStyleWidget"
+          file "$APP/DeskStyle"
+          file "$APPEX/DeskStyleWidget"
+          lipo -info "$APP/DeskStyle"
+          lipo -info "$APPEX/DeskStyleWidget"
+          lipo -info "$APP/DeskStyle" | grep -q arm64
+          lipo -info "$APPEX/DeskStyleWidget" | grep -q arm64
+          plutil -p "$APPEX/Info.plist" | grep -q "com.apple.widgetkit-extension"
+          plutil -p "$APP/Info.plist" | grep -q "app.deskstyle.ios"
+          if find "$APP" -name '_CodeSignature' -o -name 'embedded.mobileprovision' | grep -q .; then
+            echo "Build produced a signature or provisioning profile; expected a fully unsigned bundle"
+            find "$APP" -name '_CodeSignature' -o -name 'embedded.mobileprovision'
+            exit 1
+          fi
+
+          STAGE="$RUNNER_TEMP/ipa-stage"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE/Payload"
+          cp -R "$APP" "$STAGE/Payload/DeskStyle.app"
+          find "$STAGE/Payload" -name '_CodeSignature' -type d > "$RUNNER_TEMP/code-signatures.txt" || true
+          while IFS= read -r dir; do
+            rm -rf "$dir"
+          done < "$RUNNER_TEMP/code-signatures.txt"
+          find "$STAGE/Payload" -name 'embedded.mobileprovision' -delete || true
+          (cd "$STAGE" && zip -qry "$GITHUB_WORKSPACE/DeskStyle.ipa" Payload)
+          echo "---- ipa listing ----"
+          unzip -l "$GITHUB_WORKSPACE/DeskStyle.ipa"
+          unzip -l "$GITHUB_WORKSPACE/DeskStyle.ipa" | grep -q "Payload/DeskStyle.app/DeskStyle"
+          unzip -l "$GITHUB_WORKSPACE/DeskStyle.ipa" | grep -q "Payload/DeskStyle.app/PlugIns/DeskStyleWidget.appex/DeskStyleWidget"
+          unzip -l "$GITHUB_WORKSPACE/DeskStyle.ipa" | grep -q "Payload/DeskStyle.app/PlugIns/DeskStyleWidget.appex/Info.plist"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskStyle-ipa
+          path: DeskStyle.ipa
+          if-no-files-found: error
+          retention-days: 14
